@@ -12,6 +12,21 @@
 <body>
   <div class="container">
     <h1>KML → Grid KML Generator</h1>
+    <div id="progress" style="display:none; margin-bottom:15px;">
+  <div style="background:#007bff; width:0%; height:20px; border-radius:4px;" id="bar"></div>
+</div>
+
+<script>
+function startProgress() {
+    document.getElementById("progress").style.display = "block";
+    let bar = document.getElementById("bar");
+    let width = 0;
+    let timer = setInterval(() => {
+        if (width >= 95) { clearInterval(timer); }
+        else { width += 1; bar.style.width = width + "%"; }
+    }, 30);
+}
+</script>
 
     <!-- Upload Form -->
     <form action="/" method="post" enctype="multipart/form-data">
