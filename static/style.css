@@ -8,3 +8,16 @@ button { background:#007bff; color:#fff; border:none; padding:10px 16px; border-
 button:hover { background:#0069d9; }
 footer { margin-top:18px; text-align:center; color:#666; font-size:14px; padding-top:8px; border-top:1px solid #eee; }
 .info { padding:8px 0; }
+.flash {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+.flash.danger {
+    background: #ffcccc;
+    color: #900;
+}
+.flash.success {
+    background: #ccffcc;
+    color: #060;
+}
