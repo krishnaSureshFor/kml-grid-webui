@@ -210,6 +210,3 @@ def download_file(path):
         flash("File not found.", "danger")
         return redirect(url_for("index"))
 
-if __name__ == "__main__":
-    # for local debug only; Render will run via gunicorn
-    app.run(debug=True, port=5000)
