@@ -8,6 +8,8 @@ from shapely.ops import transform, unary_union
 import simplekml
 from pyproj import Transformer, CRS
 import zipfile
+from lxml import etree
+
 
 # Configuration
 UPLOAD_FOLDER = "uploads"
@@ -24,66 +26,45 @@ def allowed_file(filename):
 
 def parse_kml(filepath):
     """
-    Parses KML or KMZ file specified by filepath; returns list of shapely Polygon objects
-    extracted from all Placemarks in the file, including nested MultiGeometry.
+    Reads KML manually (more accurate than fastkml) and extracts all Polygon coordinate sets.
+    Supports:
+    - MultiGeometry
+    - Multiple Placemarks
+    - Newline-separated coordinates
     """
-    geometries = []
 
-    # Read .kml or .kmz
-    ext = filepath.lower().rsplit(".", 1)[-1]
-    if ext == "kmz":
-        with zipfile.ZipFile(filepath, "r") as z:
-            kml_files = [f for f in z.namelist() if f.lower().endswith(".kml")]
-            if not kml_files:
-                return geometries
-            with z.open(kml_files[0]) as f:
-                doc = f.read()
-    else:
-        with open(filepath, "rb") as f:
-            doc = f.read()
+    with open(filepath, "rb") as f:
+        xml = f.read()
 
-    k = kml.KML()
-    k.from_string(doc)
+    root = etree.fromstring(xml)
 
-    def extract_feats(feats):
-        for feat in feats:
-            # If the feature has geometry
-            if hasattr(feat, "geometry") and feat.geometry:
-                try:
-                    geom = shape(feat.geometry)
-                except Exception:
-                    geom = None
-                if geom:
-                    # If geometry is a polygon
-                    if isinstance(geom, Polygon):
-                        geometries.append(geom)
-                    # If MultiPolygon or collection, flatten it
-                    elif isinstance(geom, MultiPolygon):
-                        for g in geom.geoms:
-                            if isinstance(g, Polygon):
-                                geometries.append(g)
-                    elif hasattr(geom, 'geoms'):
-                        # For GeometryCollection etc
-                        for sub in geom.geoms:
-                            if isinstance(sub, Polygon):
-                                geometries.append(sub)
+    # Namespace fix
+    ns = {"kml": "http://www.opengis.net/kml/2.2"}
 
-            # Recurse sub-features
-            if hasattr(feat, "features"):
-                sub = feat.features
-                if isinstance(sub, list) and sub:
-                    extract_feats(sub)
+    polygons = []
 
-    top_feats = k.features
-    if isinstance(top_feats, list):
-        extract_feats(top_feats)
+    # find all <coordinates> tags inside <Polygon>
+    coords_list = root.findall(".//kml:Polygon//kml:coordinates", ns)
 
-    # Optional: unify geometries if you want one combined polygon
-    # unified = unary_union(geometries)
-    # if isinstance(unified, Polygon):
-    #    return [unified]
+    for coords in coords_list:
+        raw = coords.text.strip()
 
-    return geometries
+        # Normalize: split by newline or space
+        parts = raw.replace("\n", " ").replace("\t", " ").split()
+
+        ring = []
+        for p in parts:
+            vals = p.split(",")
+            if len(vals) >= 2:
+                lon = float(vals[0])
+                lat = float(vals[1])
+                ring.append((lon, lat))
+
+        # Create shapely polygon
+        if len(ring) >= 3:
+            polygons.append(Polygon(ring))
+
+    return polygons
 
 def make_grid_for_polygon(poly, grid_meters, id_start, prefix="G"):
     """
