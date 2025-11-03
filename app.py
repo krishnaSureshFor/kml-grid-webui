@@ -232,13 +232,14 @@ def index():
     # GET request → show form
     return render_template("index.html")
 
-@app.route("/download/<path:path>")
-def download_file(path):
-    # path is relative path inside UPLOAD_FOLDER
-    full = os.path.join(app.config["UPLOAD_FOLDER"], path)
-    if os.path.exists(full):
-        return send_file(full, as_attachment=True)
-    else:
-        flash("File not found.", "danger")
+@app.route("/download")
+def download_file():
+    path = request.args.get("path")
+    if not path:
+        flash("No file path provided", "danger")
         return redirect(url_for("index"))
+
+    full = os.path.join(app.config["UPLOAD_FOLDER"], path)
+    return send_file(full, as_attachment=True)
+
 
