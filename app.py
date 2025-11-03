@@ -25,13 +25,18 @@ def allowed_file(filename):
 
 def parse_kml(filepath):
     """
-    Parse a KML/KMZ file and return a list of Polygon/MultiPolygon geometries.
-    Supports multiple nested folders and Placemarks.
-    Works for fastkml where .features is a property, not a method.
+    Full recursive KML/KMZ parser.
+    Supports: Document, Folder, Placemark, MultiGeometry, Polygon.
+    Returns: list of shapely polygons in WGS84.
     """
+
+    import zipfile
+    from fastkml import kml
+    from shapely.geometry import shape, Polygon, MultiPolygon
+
     geometries = []
 
-    # Detect KMZ (zip)
+    # --- READ KML/KMZ FILE ---
     ext = filepath.lower().rsplit(".", 1)[1]
     if ext == "kmz":
         with zipfile.ZipFile(filepath, "r") as z:
@@ -47,30 +52,37 @@ def parse_kml(filepath):
     k = kml.KML()
     k.from_string(doc)
 
-    # ✅ FIX: features is a property → DO NOT CALL IT
-    def walk_features(feats):
-        for feat in feats:
-            # If it has a geometry (Polygon or MultiPolygon)
+    # --- FIX: features is a list, not callable ---
+    def walk(feat_list):
+        for feat in feat_list:
+            # --- If it has geometry ---
             if hasattr(feat, "geometry") and feat.geometry:
                 try:
-                    geom = shape(feat.geometry)
-                    geometries.append(geom)
+                    g = shape(feat.geometry)
+
+                    # Polygon
+                    if isinstance(g, Polygon):
+                        geometries.append(g)
+
+                    # MultiPolygon
+                    elif isinstance(g, MultiPolygon):
+                        for sub in g.geoms:
+                            geometries.append(sub)
+
                 except Exception:
                     pass
 
-            # ✅ FIX: feat.features is also a property
+            # --- Recurse into sub-features ---
             if hasattr(feat, "features"):
-                sub = feat.features  # ✅ do not call sub()
+                sub = feat.features   # not callable
                 if isinstance(sub, list):
-                    walk_features(sub)
+                    walk(sub)
 
-    # Top-level features
     top = k.features
     if isinstance(top, list):
-        walk_features(top)
+        walk(top)
 
     return geometries
-
 
 def make_grid_for_polygon(poly, grid_meters, id_start, prefix="G"):
     """
