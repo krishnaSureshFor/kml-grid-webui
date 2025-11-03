@@ -84,15 +84,16 @@
       </div>
     </form>
 
-    <!-- LARGE DRAW MAP BEFORE GENERATION -->
+    <!-- DRAW MAP BEFORE GENERATION -->
     {% if not preview_url %}
     <h3>Draw Polygon</h3>
     <div id="map_draw" class="big-draw-map"></div>
     {% endif %}
 
-    <!-- PREVIEW & DOWNLOADS -->
+    <!-- PREVIEW + DOWNLOADS -->
     {% if preview_url %}
     <hr>
+
     <div class="info">
       <p>{{ total_cells }} grid cells generated.</p>
       <p>
@@ -120,9 +121,11 @@
 
   </div>
 
-<!-- ✅ ✅ JAVASCRIPT SECTION (IMPORTANT) -->
+<!-- ✅ ✅ JAVASCRIPT SECTION -->
 <script>
-// Progress bar animation
+/* ------------------------------
+   Progress bar
+------------------------------ */
 function startProgress(){
   document.getElementById('progress').style.display='block';
   let bar = document.getElementById('bar');
@@ -131,30 +134,35 @@ function startProgress(){
 }
 
 /* ------------------------------
-   DRAW MAP INITIALIZATION
+   DRAW MAP — only if exists
 ------------------------------ */
-var drawMap = L.map('map_draw').setView([20,78], 5);
+if (document.getElementById('map_draw')) {
 
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',{maxZoom:19}).addTo(drawMap);
+    var drawMap = L.map('map_draw').setView([20,78], 5);
 
-var drawnItems = new L.FeatureGroup();
-drawMap.addLayer(drawnItems);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',{maxZoom:19}).addTo(drawMap);
 
-var drawControl = new L.Control.Draw({
-  draw: { polygon:true, rectangle:true, polyline:false, circle:false, marker:false },
-  edit: { featureGroup: drawnItems }
-});
-drawMap.addControl(drawControl);
+    var drawnItems = new L.FeatureGroup();
+    drawMap.addLayer(drawnItems);
 
-drawMap.on(L.Draw.Event.CREATED, function(e){
-  drawnItems.addLayer(e.layer);
-});
+    var drawControl = new L.Control.Draw({
+      draw: { polygon:true, rectangle:true, polyline:false, circle:false, marker:false },
+      edit: { featureGroup: drawnItems }
+    });
+    drawMap.addControl(drawControl);
+
+    drawMap.on(L.Draw.Event.CREATED, function(e){
+      drawnItems.addLayer(e.layer);
+    });
+
+    setTimeout(() => drawMap.invalidateSize(), 300);
+}
 
 /* ------------------------------
-   USE DRAWN POLYGON
+   Use Drawn Polygon
 ------------------------------ */
 function useDrawn(){
-  if (drawnItems.getLayers().length === 0){
+  if (!window.drawnItems || drawnItems.getLayers().length === 0){
     alert("No polygons drawn.");
     return;
   }
@@ -164,26 +172,45 @@ function useDrawn(){
 }
 
 /* ------------------------------
-   PREVIEW MAP AFTER GRID GENERATION
+   PREVIEW MAP
 ------------------------------ */
 {% if preview_url %}
-var preview = L.map('map').setView([20,78], 5);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:19
-}).addTo(preview);
+if (document.getElementById('map')) {
 
-omnivore.kml("{{ preview_url }}")
-  .on('ready', function(){
-    preview.fitBounds(this.getBounds());
-    setTimeout(()=>preview.invalidateSize(true),300);
-  })
-  .addTo(preview);
+    var preview = L.map('map').setView([20,78], 5);
 
-/* Small draw map */
-var smallMap = L.map('map_draw_small').setView([20,78],5);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(smallMap);
-var smallDrawLayer = new L.FeatureGroup(); smallMap.addLayer(smallDrawLayer);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19
+    }).addTo(preview);
+
+    omnivore.kml("{{ preview_url }}")
+      .on('ready', function(){
+        preview.fitBounds(this.getBounds());
+        setTimeout(() => preview.invalidateSize(), 300);
+      })
+      .on('error', function(err){
+        console.log("KML Load Error:", err);
+      })
+      .addTo(preview);
+}
+
+/* ------------------------------
+   SMALL DRAW MAP AFTER PREVIEW
+------------------------------ */
+if (document.getElementById('map_draw_small')) {
+
+    var smallMap = L.map('map_draw_small').setView([20,78], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19
+    }).addTo(smallMap);
+
+    var smallDrawLayer = new L.FeatureGroup();
+    smallMap.addLayer(smallDrawLayer);
+
+    setTimeout(() => smallMap.invalidateSize(), 300);
+}
 
 {% endif %}
 </script>
