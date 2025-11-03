@@ -122,83 +122,102 @@ def make_grid_for_polygon(poly, grid_meters, id_start, prefix="G"):
 
     return cells, idx
 
-@app.route("/", methods=("GET", "POST"))
+@app.route("/", methods=["GET", "POST"])
 def index():
+    print("\n---- NEW REQUEST ----")
+
     if request.method == "POST":
-        # read form
+        print("POST received")
+
+        # Read form
         file = request.files.get("kmlfile")
-        grid_size = request.form.get("grid_size")
+        grid_size_raw = request.form.get("grid_size")
         prefix = request.form.get("prefix") or "G"
         preview = request.form.get("preview") == "on"
 
-        # validations
+        print("File object:", file)
+        print("Filename:", file.filename if file else None)
+        print("Grid size raw:", grid_size_raw)
+        print("Prefix:", prefix)
+        print("Preview flag:", preview)
+
+        # If file missing
         if not file or file.filename == "":
-            flash("Please upload a KML or KMZ file.", "danger")
-            return redirect(request.url)
-        if not allowed_file(file.filename):
-            flash("Only .kml or .kmz files are allowed.", "danger")
-            return redirect(request.url)
-        try:
-            grid_size = float(grid_size)
-            if grid_size <= 0:
-                raise ValueError("Grid size must be > 0")
-        except Exception:
-            flash("Grid size must be a positive number (meters).", "danger")
+            print("ERROR: No file received")
+            flash("File upload FAILED — server did NOT receive any file.", "danger")
             return redirect(request.url)
 
-        # save uploaded file to a temporary folder under uploads/
-        tmpdir = tempfile.mkdtemp(dir=app.config["UPLOAD_FOLDER"])
-        filepath = os.path.join(tmpdir, file.filename)
+        # Grid size convert
         try:
+            grid_size = float(grid_size_raw)
+            print("Grid size OK:", grid_size)
+        except Exception as e:
+            print("ERROR: grid_size conversion failed:", e)
+            flash("Grid size invalid: " + str(e), "danger")
+            return redirect(request.url)
+
+        # Save uploaded file
+        try:
+            tmpdir = tempfile.mkdtemp(dir=app.config["UPLOAD_FOLDER"])
+            filepath = os.path.join(tmpdir, file.filename)
             file.save(filepath)
-        except Exception:
-            flash("Failed to save uploaded file.", "danger")
+            print("File saved to:", filepath)
+        except Exception as e:
+            print("ERROR saving file:", e)
+            flash("Server failed to save uploaded file: " + str(e), "danger")
             return redirect(request.url)
 
-        # parse polygons
-        polys = parse_kml(filepath)
+        # Parse KML polygons
+        try:
+            polys = parse_kml(filepath)
+            print("Polygons found:", len(polys))
+        except Exception as e:
+            print("ERROR parsing KML:", e)
+            flash("KML parsing failed: " + str(e), "danger")
+            return redirect(request.url)
+
         if not polys:
-            flash("No polygon geometry found in uploaded KML/KMZ.", "danger")
+            print("ERROR: No polygon geometries detected")
+            flash("Uploaded KML contains NO polygons!", "danger")
             return redirect(request.url)
 
-        # generate KML grid
-        kml_out = simplekml.Kml()
-        cur_idx = 1
-        total_cells = 0
+        # Generate grid
+        try:
+            print("Starting grid generation...")
+            kml_out = simplekml.Kml()
+            cur_idx = 1
+            total_cells = 0
 
-        for i, poly in enumerate(polys, start=1):
-            cells, cur_idx = make_grid_for_polygon(poly, grid_size, cur_idx, prefix)
-            total_cells += len(cells)
+            for i, poly in enumerate(polys, start=1):
+                cells, cur_idx = make_grid_for_polygon(poly, grid_size, cur_idx, prefix)
+                total_cells += len(cells)
+                print(f"Polygon {i}: cells = {len(cells)}")
 
-            folder = kml_out.newfolder(name=f"Polygon_{i}_grids")
-            # add original polygon as reference (optional)
-            try:
-                orig = folder.newpolygon(name=f"Polygon_{i}_source", outerboundaryis=list(poly.exterior.coords))
-                orig.style.polystyle.fill = 0
-                orig.style.linestyle.color = simplekml.Color.hex("ff00ff00")  # green outline
-            except Exception:
-                pass
+                folder = kml_out.newfolder(name=f"Polygon_{i}")
+                for poly_geom, center_point, nid in cells:
+                    pg = folder.newpolygon(
+                        name=nid,
+                        outerboundaryis=list(poly_geom.exterior.coords)
+                    )
+                    pg.style.polystyle.fill = 0
+                    pg.style.linestyle.color = simplekml.Color.red
 
-            for poly_geom, center_point, id_str in cells:
-                # add polygon (clipped cell)
-                coords = list(poly_geom.exterior.coords)
-                pol = folder.newpolygon(name=id_str, outerboundaryis=coords)
-                pol.style.polystyle.fill = 0
-                pol.style.linestyle.width = 1
-                pol.style.linestyle.color = simplekml.Color.hex("ff0000ff")[::-1] if False else simplekml.Color.red
-                # add center point label (hidden icon but label visible)
-                pt = folder.newpoint(name=id_str, coords=[(center_point.x, center_point.y)])
-                pt.style.iconstyle.scale = 0  # hide icon, keep label
+                    pt = folder.newpoint(name=nid, coords=[(center_point.x, center_point.y)])
+                    pt.style.iconstyle.scale = 0
 
-        # metadata
-        kml_out.document.description = f"Grid generated by web UI. Developed by Krishnasureshkumar FG"
+            out_path = os.path.join(tmpdir, "Grid.kml")
+            kml_out.save(out_path)
+            print("Grid saved to:", out_path)
 
-        out_path = os.path.join(tmpdir, "Grid.kml")
-        kml_out.save(out_path)
+        except Exception as e:
+            print("ERROR generating grid:", e)
+            flash("Grid generation failed: " + str(e), "danger")
+            return redirect(request.url)
 
-        # preview: return template with preview_url that points to /download/<folder>/Grid.kml
+        # Preview mode
         if preview:
-            preview_url = url_for("download_file", path=os.path.basename(tmpdir) + "/Grid.kml")
+            preview_url = url_for("download_file")
+            print("Preview URL:", preview_url)
             return render_template(
                 "index.html",
                 preview_url=preview_url,
@@ -208,10 +227,9 @@ def index():
                 prefix=prefix
             )
 
-        # otherwise directly send file for download
-        return send_file(out_path, as_attachment=True, download_name="Grid.kml")
+        return send_file(out_path, as_attachment=True)
 
-    # GET
+    # GET request → show form
     return render_template("index.html")
 
 @app.route("/download/<path:path>")
