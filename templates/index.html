@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>KML Grid Generator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-omnivore/0.3.4/leaflet-omnivore.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>KML → Grid KML Generator</h1>
+    <form method="post" enctype="multipart/form-data">
+      <div class="row">
+        <label>Upload KML/KMZ</label>
+        <input type="file" name="kmlfile" accept=".kml,.kmz" required>
+      </div>
+      <div class="row">
+        <label>Grid size (meters)</label>
+        <input type="number" name="grid_size" value="100" min="1" required>
+      </div>
+      <div class="row">
+        <label>Grid ID prefix</label>
+        <input type="text" name="prefix" value="G" maxlength="10">
+      </div>
+      <div class="row checkbox">
+        <label><input type="checkbox" name="preview" checked> Show Preview after generation</label>
+      </div>
+      <div class="row">
+        <button type="submit">Generate Grid</button>
+      </div>
+    </form>
+
+    {% if preview_url %}
+    <hr>
+    <div class="info">
+      <p>Generated grid with <strong>{{ total_cells }}</strong> cells. <a href="{{ download_url }}">Download KML</a></p>
+    </div>
+    <div id="map" style="height:600px;"></div>
+    <script>
+      var map = L.map('map').setView([20,78], 5);
+      var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19, attribution: '© OpenStreetMap'
+      }).addTo(map);
+      // load kml
+      omnivore.kml("{{ preview_url }}").on('ready', function() {
+          map.fitBounds(this.getBounds());
+      }).addTo(map);
+    </script>
+    {% endif %}
+
+    <footer>
+      <p>Developed by Krishnasureshkumar FG</p>
+    </footer>
+  </div>
+</body>
+</html>
