@@ -1,55 +1,51 @@
 import os
-import zipfile
 import tempfile
+from pathlib import Path
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash
-from fastkml import kml
-from shapely.geometry import shape, Polygon, MultiPolygon, box, Point, GeometryCollection
-from shapely.ops import transform, unary_union
+from shapely.geometry import Polygon, Point, box
+from shapely.ops import transform
 import simplekml
 from pyproj import Transformer, CRS
-import zipfile
 from lxml import etree
 
-
-# Configuration
+# ----------------------------
+# Flask setup
+# ----------------------------
 UPLOAD_FOLDER = "uploads"
-ALLOWED_EXT = {"kml", "kmz"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = "change_me_to_a_secure_random_value"
+app.secret_key = "secret123"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB limit
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB
+
+ALLOWED_EXT = {"kml", "kmz"}
+
+
+# ----------------------------
+# Helper functions
+# ----------------------------
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
 
-def parse_kml(filepath):
-    """
-    Reads KML manually (more accurate than fastkml) and extracts all Polygon coordinate sets.
-    Supports:
-    - MultiGeometry
-    - Multiple Placemarks
-    - Newline-separated coordinates
-    """
 
+# ✅ Manual XML KML parser (works for ANY polygon format)
+def parse_kml(filepath):
     with open(filepath, "rb") as f:
         xml = f.read()
 
     root = etree.fromstring(xml)
 
-    # Namespace fix
     ns = {"kml": "http://www.opengis.net/kml/2.2"}
-
     polygons = []
 
-    # find all <coordinates> tags inside <Polygon>
     coords_list = root.findall(".//kml:Polygon//kml:coordinates", ns)
 
     for coords in coords_list:
         raw = coords.text.strip()
 
-        # Normalize: split by newline or space
+        # normalize
         parts = raw.replace("\n", " ").replace("\t", " ").split()
 
         ring = []
@@ -60,170 +56,142 @@ def parse_kml(filepath):
                 lat = float(vals[1])
                 ring.append((lon, lat))
 
-        # Create shapely polygon
         if len(ring) >= 3:
             polygons.append(Polygon(ring))
 
     return polygons
 
-def make_grid_for_polygon(poly, grid_meters, id_start, prefix="G"):
-    """
-    Create grid cells (clipped to polygon) in metric CRS and return geometries back to lon/lat.
-    Returns list of tuples: (clipped_polygon_lonlat, center_point_lonlat, id_str), and next index.
-    """
-    # project to Web Mercator (meters)
+
+# ✅ Grid generator
+def make_grid_for_polygon(poly, grid_m, id_start, prefix="G"):
     crs_from = CRS.from_epsg(4326)
     crs_to = CRS.from_epsg(3857)
     project_to_m = Transformer.from_crs(crs_from, crs_to, always_xy=True).transform
-    project_to_lonlat = Transformer.from_crs(crs_to, crs_from, always_xy=True).transform
+    project_to_ll = Transformer.from_crs(crs_to, crs_from, always_xy=True).transform
 
     poly_m = transform(project_to_m, poly)
     minx, miny, maxx, maxy = poly_m.bounds
 
     cells = []
-    # compute counts (ensure at least 1)
-    nx = max(1, int((maxx - minx) / grid_meters) + 1)
-    ny = max(1, int((maxy - miny) / grid_meters) + 1)
     idx = id_start
+
+    nx = int((maxx - minx) / grid_m) + 1
+    ny = int((maxy - miny) / grid_m) + 1
 
     for i in range(nx):
         for j in range(ny):
-            x0 = minx + i * grid_meters
-            y0 = miny + j * grid_meters
-            cell = box(x0, y0, x0 + grid_meters, y0 + grid_meters)
+            x0 = minx + i * grid_m
+            y0 = miny + j * grid_m
+
+            cell = box(x0, y0, x0 + grid_m, y0 + grid_m)
+
             if poly_m.intersects(cell):
                 inter = poly_m.intersection(cell)
-                # transform clipped geometry back to lon/lat
-                cell_lonlat = transform(project_to_lonlat, inter)
-                center_m = cell.centroid
-                center_lonlat = transform(project_to_lonlat, center_m)
+                inter_ll = transform(project_to_ll, inter)
+                center = cell.centroid
+                center_ll = transform(project_to_ll, center)
+
                 id_str = f"{prefix}_{idx:04d}"
-                cells.append((cell_lonlat, Point(center_lonlat.x, center_lonlat.y), id_str))
+                cells.append((inter_ll, Point(center_ll.x, center_ll.y), id_str))
                 idx += 1
 
     return cells, idx
 
+
+# ----------------------------
+# Routes
+# ----------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
-    print("\n---- NEW REQUEST ----")
-
     if request.method == "POST":
-        print("POST received")
-
-        # Read form
         file = request.files.get("kmlfile")
         grid_size_raw = request.form.get("grid_size")
         prefix = request.form.get("prefix") or "G"
         preview = request.form.get("preview") == "on"
 
-        print("File object:", file)
-        print("Filename:", file.filename if file else None)
-        print("Grid size raw:", grid_size_raw)
-        print("Prefix:", prefix)
-        print("Preview flag:", preview)
-
-        # If file missing
         if not file or file.filename == "":
-            print("ERROR: No file received")
-            flash("File upload FAILED — server did NOT receive any file.", "danger")
+            flash("Please upload a KML/KMZ file.", "danger")
             return redirect(request.url)
 
-        # Grid size convert
+        if not allowed_file(file.filename):
+            flash("Invalid file type. Only .kml or .kmz allowed.", "danger")
+            return redirect(request.url)
+
         try:
             grid_size = float(grid_size_raw)
-            print("Grid size OK:", grid_size)
-        except Exception as e:
-            print("ERROR: grid_size conversion failed:", e)
-            flash("Grid size invalid: " + str(e), "danger")
+        except:
+            flash("Grid size must be a number.", "danger")
             return redirect(request.url)
 
-        # Save uploaded file
-        try:
-            tmpdir = tempfile.mkdtemp(dir=app.config["UPLOAD_FOLDER"])
-            filepath = os.path.join(tmpdir, file.filename)
-            file.save(filepath)
-            print("File saved to:", filepath)
-        except Exception as e:
-            print("ERROR saving file:", e)
-            flash("Server failed to save uploaded file: " + str(e), "danger")
-            return redirect(request.url)
+        tmpdir = tempfile.mkdtemp(dir=app.config["UPLOAD_FOLDER"])
+        filepath = os.path.join(tmpdir, file.filename)
+        file.save(filepath)
 
-        # Parse KML polygons
-        try:
-            polys = parse_kml(filepath)
-            print("Polygons found:", len(polys))
-        except Exception as e:
-            print("ERROR parsing KML:", e)
-            flash("KML parsing failed: " + str(e), "danger")
-            return redirect(request.url)
+        polys = parse_kml(filepath)
 
         if not polys:
-            print("ERROR: No polygon geometries detected")
-            flash("Uploaded KML contains NO polygons!", "danger")
+            flash("No polygon found inside KML file.", "danger")
             return redirect(request.url)
 
-        # Generate grid
-        try:
-            print("Starting grid generation...")
-            kml_out = simplekml.Kml()
-            cur_idx = 1
-            total_cells = 0
+        kml_out = simplekml.Kml()
+        cur_idx = 1
+        total_cells = 0
 
-            for i, poly in enumerate(polys, start=1):
-                cells, cur_idx = make_grid_for_polygon(poly, grid_size, cur_idx, prefix)
-                total_cells += len(cells)
-                print(f"Polygon {i}: cells = {len(cells)}")
+        for i, poly in enumerate(polys, start=1):
+            cells, cur_idx = make_grid_for_polygon(poly, grid_size, cur_idx, prefix)
+            total_cells += len(cells)
 
-                folder = kml_out.newfolder(name=f"Polygon_{i}")
-                for poly_geom, center_point, nid in cells:
-                    pg = folder.newpolygon(
-                        name=nid,
-                        outerboundaryis=list(poly_geom.exterior.coords)
-                    )
-                    pg.style.polystyle.fill = 0
-                    pg.style.linestyle.color = simplekml.Color.red
+            folder = kml_out.newfolder(name=f"Polygon_{i}")
 
-                    pt = folder.newpoint(name=nid, coords=[(center_point.x, center_point.y)])
-                    pt.style.iconstyle.scale = 0
+            for geom, center, cid in cells:
+                pg = folder.newpolygon(
+                    name=cid,
+                    outerboundaryis=list(geom.exterior.coords)
+                )
+                pg.style.polystyle.fill = 0
+                pg.style.linestyle.color = simplekml.Color.red
 
-            out_path = os.path.join(tmpdir, "Grid.kml")
-            kml_out.save(out_path)
-            print("Grid saved to:", out_path)
+                pt = folder.newpoint(name=cid, coords=[(center.x, center.y)])
+                pt.style.iconstyle.scale = 0
 
-        except Exception as e:
-            print("ERROR generating grid:", e)
-            flash("Grid generation failed: " + str(e), "danger")
-            return redirect(request.url)
+        out_path = os.path.join(tmpdir, "Grid.kml")
+        kml_out.save(out_path)
 
-        # Preview mode
         if preview:
-    file_rel_path = os.path.basename(tmpdir) + "/Grid.kml"
-    preview_url = url_for("download_file", path=file_rel_path)
+            rel_path = os.path.basename(tmpdir) + "/Grid.kml"
+            preview_url = url_for("download_file", path=rel_path)
 
-    print("Preview URL:", preview_url)
-
-    return render_template(
-        "index.html",
-        preview_url=preview_url,
-        download_url=preview_url,
-        total_cells=total_cells,
-        grid_size=grid_size,
-        prefix=prefix
-    )
+            return render_template(
+                "index.html",
+                preview_url=preview_url,
+                download_url=preview_url,
+                total_cells=total_cells,
+                grid_size=grid_size,
+                prefix=prefix
+            )
 
         return send_file(out_path, as_attachment=True)
 
-    # GET request → show form
     return render_template("index.html")
 
+
+# ✅ Download endpoint
 @app.route("/download")
 def download_file():
     path = request.args.get("path")
     if not path:
-        flash("No file path provided", "danger")
+        flash("Missing download path.", "danger")
         return redirect(url_for("index"))
 
     full = os.path.join(app.config["UPLOAD_FOLDER"], path)
+    if not os.path.exists(full):
+        flash("File not found.", "danger")
+        return redirect(url_for("index"))
+
     return send_file(full, as_attachment=True)
+
+
+# ✅ IMPORTANT: Do NOT add app.run() — Render uses gunicorn
+# gunicorn runs this app as: gunicorn app:app
 
 
