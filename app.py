@@ -197,16 +197,19 @@ def index():
 
         # Preview mode
         if preview:
-            preview_url = url_for("download_file")
-            print("Preview URL:", preview_url)
-            return render_template(
-                "index.html",
-                preview_url=preview_url,
-                download_url=preview_url,
-                total_cells=total_cells,
-                grid_size=grid_size,
-                prefix=prefix
-            )
+    file_rel_path = os.path.basename(tmpdir) + "/Grid.kml"
+    preview_url = url_for("download_file", path=file_rel_path)
+
+    print("Preview URL:", preview_url)
+
+    return render_template(
+        "index.html",
+        preview_url=preview_url,
+        download_url=preview_url,
+        total_cells=total_cells,
+        grid_size=grid_size,
+        prefix=prefix
+    )
 
         return send_file(out_path, as_attachment=True)
 
