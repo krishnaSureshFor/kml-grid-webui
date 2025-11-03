@@ -24,18 +24,26 @@
 </head>
 <body>
   <div class="container">
-    <h1>KML Grid Generator — Advanced</h1>
-    <div class="main">
-      <div id="progress" style="display:none; margin-bottom:10px;"><div id="bar" style="height:8px;background:#007bff;width:0%"></div></div>
 
-      <form id="mainform" action="/" method="post" enctype="multipart/form-data" onsubmit="startProgress()">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
+    <h1>KML Grid Generator — Advanced</h1>
+
+    <!-- PROGRESS BAR -->
+    <div id="progress" style="display:none; margin-bottom:10px;">
+      <div id="bar" style="height:8px;background:#007bff;width:0%"></div>
+    </div>
+
+    <!-- MAIN FORM -->
+    <form id="mainform" action="/" method="post" enctype="multipart/form-data" onsubmit="startProgress()">
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="options-block">
 
         <div class="row">
           <label>Upload KML/KMZ/GeoJSON</label>
@@ -43,8 +51,8 @@
         </div>
 
         <div class="row">
-          <label>Or draw polygon on map</label>
-          <button type="button" onclick="useDrawn()">Use drawn polygon</button>
+          <label>OR Draw Polygon on Map (below)</label>
+          <button type="button" onclick="useDrawn()">Use Drawn Polygon</button>
           <input type="hidden" id="drawn_geojson" name="drawn_geojson">
         </div>
 
@@ -54,123 +62,82 @@
         </div>
 
         <div class="row">
-          <label>Grid ID prefix</label>
+          <label>Grid ID Prefix</label>
           <input type="text" name="prefix" value="G" maxlength="10">
         </div>
 
         <div class="row checkbox">
-          <label><input type="checkbox" name="preview" checked> Show preview</label>
+          <label><input type="checkbox" name="preview" checked> Show Grid Preview</label>
         </div>
 
         <div class="row checkbox">
-          <label><input type="checkbox" name="merge_polys"> Merge polygons before gridding</label>
+          <label><input type="checkbox" name="merge_polys"> Merge polygons before grid</label>
         </div>
 
         <div class="row checkbox">
-          <label><input type="checkbox" name="show_labels"> Show labels on map</label>
+          <label><input type="checkbox" name="show_labels"> Show labels on preview</label>
         </div>
 
-        <div class="row">
-          <label>Export options</label><br>
-          <label><input type="checkbox" name="export_geojson" checked> GeoJSON</label><br>
-          <label><input type="checkbox" name="export_shp" checked> Shapefile (zipped)</label><br>
-          <label><input type="checkbox" name="export_gpkg"> GeoPackage</label><br>
+        <h3>Export Options</h3>
+        <div class="row checkbox">
+          <label><input type="checkbox" name="export_geojson" checked> GeoJSON</label>
+        </div>
+        <div class="row checkbox">
+          <label><input type="checkbox" name="export_shp" checked> Shapefile (ZIP)</label>
+        </div>
+        <div class="row checkbox">
+          <label><input type="checkbox" name="export_gpkg"> GeoPackage</label>
+        </div>
+        <div class="row checkbox">
           <label><input type="checkbox" name="export_pdf"> PDF Map</label>
         </div>
 
         <div class="row">
           <button type="submit">Generate Grid</button>
         </div>
-      </form>
 
-      <!-- Preview & downloads -->
-      {% if preview_url %}
-      <hr>
-      <div class="info">
-        <p>Generated <strong>{{ total_cells }}</strong> cells</p>
-        <p>
-          <a href="{{ download_url }}">KML</a>
-          {% if download_kmz %} | <a href="{{ download_kmz }}">KMZ</a>{% endif %}
-          {% if download_geojson %} | <a href="{{ download_geojson }}">GeoJSON</a>{% endif %}
-          {% if download_shp %} | <a href="{{ download_shp }}">Shapefile (ZIP)</a>{% endif %}
-          {% if download_gpkg %} | <a href="{{ download_gpkg }}">GPKG</a>{% endif %}
-          {% if download_csv %} | <a href="{{ download_csv }}">CSV</a>{% endif %}
-          {% if download_pdf %} | <a href="{{ download_pdf }}">PDF</a>{% endif %}
-        </p>
       </div>
-      <div id="map"></div>
-      <script>
-        var map = L.map('map').setView([20,78],5);
-        var base = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    </form>
 
-        omnivore.kml("{{ preview_url }}")
-          .on('ready', function() {
-            map.fitBounds(this.getBounds());
-            document.getElementById('bar').style.width = '100%';
-          })
-          .addTo(map);
-      </script>
-      {% endif %}
+    <!-- LARGE DRAW MAP BEFORE GENERATION -->
+    {% if not preview_url %}
+    <div id="draw-map-container">
+      <h3>Draw Polygon Below</h3>
+      <div id="map_draw" class="big-draw-map"></div>
+      <p>Use the drawing tools to create polygon(s) then click "Use Drawn Polygon".</p>
+    </div>
+    {% endif %}
 
+    <!-- PREVIEW + DOWNLOAD LINKS -->
+    {% if preview_url %}
+    <hr>
+    <div class="info">
+      <p>Generated <strong>{{ total_cells }}</strong> grid cells</p>
+      <p>
+        <a href="{{ download_url }}">KML</a>
+        {% if download_kmz %} | <a href="{{ download_kmz }}">KMZ</a>{% endif %}
+        {% if download_geojson %} | <a href="{{ download_geojson }}">GeoJSON</a>{% endif %}
+        {% if download_shp %} | <a href="{{ download_shp }}">Shapefile (ZIP)</a>{% endif %}
+        {% if download_gpkg %} | <a href="{{ download_gpkg }}">GPKG</a>{% endif %}
+        {% if download_csv %} | <a href="{{ download_csv }}">CSV</a>{% endif %}
+        {% if download_pdf %} | <a href="{{ download_pdf }}">PDF</a>{% endif %}
+      </p>
     </div>
 
-    <div class="sidebar">
-      <h3>Tools</h3>
-      <div id="drawcontrols">
-        <div id="map_small" style="height:250px"></div>
-        <p class="small">Use the tools on the mini-map to draw polygon(s). Click "Use drawn polygon" to use them.</p>
-      </div>
+    <div id="map" class="preview-map"></div>
 
-      <h4>Job history</h4>
-      <div id="history">
-        {% for h in history %}
-          <div class="job">
-            <b>{{ h.id }}</b> — {{ h.time }} — Cells: {{ h.cells }}<br>
-            {% if h.kml %} <a href="{{ url_for('download_file', path=h.id + '/' + h.kml) }}">KML</a> {% endif %}
-            {% if h.geojson %} | <a href="{{ url_for('download_file', path=h.id + '/' + h.geojson) }}">GeoJSON</a> {% endif %}
-            {% if h.shp %} | <a href="{{ url_for('download_file', path=h.id + '/' + h.shp) }}">SHP</a> {% endif %}
-          </div>
-        {% endfor %}
-      </div>
+    <!-- SMALL DRAW MAP AFTER GRID -->
+    <div id="small-draw-box">
+      <h4>Draw more polygons</h4>
+      <div id="map_draw_small"></div>
     </div>
 
-    <div style="clear:both"></div>
+    {% endif %}
 
-    <footer style="margin-top:20px;">
+    <footer>
       <p>Developed by Krishnasureshkumar FG</p>
     </footer>
+
   </div>
-
-<script>
-  function startProgress(){
-    document.getElementById('progress').style.display='block';
-    var bar = document.getElementById('bar'); var w=0;
-    var t = setInterval(()=>{ if(w>=95) clearInterval(t); else { w+=1; bar.style.width=w+'%'; } },25);
-  }
-
-  // initialize mini map with draw controls
-  var drawMap = L.map('map_small').setView([20,78],5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(drawMap);
-  var drawnItems = new L.FeatureGroup();
-  drawMap.addLayer(drawnItems);
-  var drawControl = new L.Control.Draw({
-    draw: { marker:false, polyline:false, circle:false, rectangle:false, circlemarker:false, polygon:true },
-    edit: { featureGroup: drawnItems }
-  });
-  drawMap.addControl(drawControl);
-  drawMap.on(L.Draw.Event.CREATED, function (e) {
-    var layer = e.layer;
-    drawnItems.addLayer(layer);
-  });
-
-  function useDrawn(){
-    if (drawnItems.getLayers().length==0){ alert('No polygon drawn.'); return; }
-    var geojson = drawnItems.toGeoJSON();
-    document.getElementById('drawn_geojson').value = JSON.stringify(geojson);
-    // submit form automatically
-    document.getElementById('mainform').submit();
-  }
-</script>
-
 </body>
 </html>
