@@ -13,6 +13,14 @@
   <div class="container">
     <h1>KML → Grid KML Generator</h1>
     <form method="post" enctype="multipart/form-data">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
       <div class="row">
         <label>Upload KML/KMZ</label>
         <input type="file" name="kmlfile" accept=".kml,.kmz" required>
