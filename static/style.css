@@ -12,3 +12,47 @@ button:hover{background:#0069d9}
 .sidebar{background:#fafafa;padding:10px;border-radius:6px}
 .job{padding:6px;border-bottom:1px solid #eee;margin-bottom:6px}
 .info{background:#f1f9ff;padding:8px;border-radius:6px;margin-bottom:8px}
+/* FULL WIDTH DRAW MAP BEFORE GENERATION */
+.big-draw-map {
+  width: 100%;
+  height: 350px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+}
+
+/* PREVIEW MAP */
+.preview-map {
+  width: 100%;
+  height: 600px;
+  border: 1px solid #ccc;
+}
+
+/* SMALL DRAW MAP AFTER GRID */
+#small-draw-box {
+  width: 280px;
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  padding: 10px;
+  background: #ffffffee;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+#map_draw_small {
+  width: 260px;
+  height: 200px;
+}
+
+/* Responsive layout */
+@media (max-width: 800px) {
+  #small-draw-box {
+    width: 90%;
+    left: 5%;
+    bottom: 10px;
+  }
+  #map_draw_small {
+    width: 100%;
+    height: 200px;
+  }
+}
