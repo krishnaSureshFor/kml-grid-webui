@@ -4,40 +4,70 @@
   <meta charset="utf-8">
   <title>KML Grid Generator</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- KML Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-omnivore/0.3.4/leaflet-omnivore.min.js"></script>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  
+  <style>
+    #progress {
+      width: 100%;
+      background: #eee;
+      height: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 15px;
+      display: none;
+    }
+    #bar {
+      background: #007bff;
+      width: 0%;
+      height: 100%;
+      transition: width 0.2s linear;
+    }
+  </style>
 </head>
+
 <body>
   <div class="container">
+
     <h1>KML → Grid KML Generator</h1>
-    <div id="progress" style="display:none; margin-bottom:15px;">
-  <div style="background:#007bff; width:0%; height:20px; border-radius:4px;" id="bar"></div>
-</div>
 
-<script>
-function startProgress() {
-    document.getElementById("progress").style.display = "block";
-    let bar = document.getElementById("bar");
-    let width = 0;
-    let timer = setInterval(() => {
-        if (width >= 95) { clearInterval(timer); }
-        else { width += 1; bar.style.width = width + "%"; }
-    }, 30);
-}
-</script>
+    <!-- PROGRESS BAR -->
+    <div id="progress">
+      <div id="bar"></div>
+    </div>
 
-    <!-- Upload Form -->
+    <script>
+      function startProgress() {
+        document.getElementById("progress").style.display = "block";
+        let bar = document.getElementById("bar");
+        let width = 0;
+        let timer = setInterval(() => {
+          if (width >= 95) clearInterval(timer);
+          else {
+            width += 1;
+            bar.style.width = width + "%";
+          }
+        }, 25);
+      }
+    </script>
+
+    <!-- UPLOAD FORM -->
     <form action="/" method="post" enctype="multipart/form-data" onsubmit="startProgress()">
 
-      <!-- Flash messages -->
       {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
-          {% endfor %}
-        {% endif %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
       {% endwith %}
 
       <div class="row">
@@ -56,47 +86,62 @@ function startProgress() {
       </div>
 
       <div class="row checkbox">
-        <label><input type="checkbox" name="preview" checked> Show Preview after generation</label>
+        <label><input type="checkbox" name="preview" checked> Show preview after generation</label>
+      </div>
+
+      <div class="row checkbox">
+        <label><input type="checkbox" name="export_kmz"> Also export as KMZ</label>
       </div>
 
       <div class="row">
         <button type="submit">Generate Grid</button>
       </div>
+
     </form>
 
-
-    <!-- PREVIEW AREA -->
+    <!-- PREVIEW + DOWNLOAD LINKS -->
     {% if preview_url %}
     <hr>
 
     <div class="info">
       <p>
-        Generated grid with <strong>{{ total_cells }}</strong> cells.
-        <a href="{{ download_url }}">Download KML</a>
+        ✅ Generated <strong>{{ total_cells }}</strong> grid cells  
+        <br>
+        📥 Download:
+        <a href="{{ download_url }}">KML</a>
+
+        {% if download_kmz %}
+          | <a href="{{ download_kmz }}">KMZ</a>
+        {% endif %}
+
+        {% if download_csv %}
+          | <a href="{{ download_csv }}">Attribute Table (CSV)</a>
+        {% endif %}
       </p>
     </div>
 
-    <div id="map" style="height:600px;"></div>
+    <!-- MAP PREVIEW -->
+    <div id="map" style="height:600px; border:1px solid #ccc;"></div>
 
     <script>
       var map = L.map('map').setView([20, 78], 5);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap'
-      }).addTo(map);
+      L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        { maxZoom: 19, attribution: "© OpenStreetMap" }
+      ).addTo(map);
 
-      // load generated grid KML
       omnivore.kml("{{ preview_url }}")
-        .on('ready', function () {
+        .on("ready", function () {
           map.fitBounds(this.getBounds());
+          document.getElementById("bar").style.width = "100%";
         })
         .addTo(map);
     </script>
     {% endif %}
 
     <footer>
-      <p>Developed by Krishnasureshkumar FG</p>
+      <p style="margin-top:20px;">Developed by Krishnasureshkumar FG</p>
     </footer>
   </div>
 </body>
