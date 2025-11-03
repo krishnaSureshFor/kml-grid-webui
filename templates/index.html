@@ -135,7 +135,7 @@ function startProgress(){
 ------------------------------ */
 var drawMap = L.map('map_draw').setView([20,78], 5);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(drawMap);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',{maxZoom:19}).addTo(drawMap);
 
 var drawnItems = new L.FeatureGroup();
 drawMap.addLayer(drawnItems);
