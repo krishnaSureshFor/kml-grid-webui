@@ -1,8 +1,11 @@
-Flask
+Flask>=2.2
 gunicorn
-shapely
-fastkml
-simplekml
-pyproj
 lxml
-Werkzeug
+shapely
+pyproj
+simplekml
+geopandas
+fiona
+rtree
+pandas
+matplotlib
