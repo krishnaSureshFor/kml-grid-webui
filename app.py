@@ -374,7 +374,7 @@ def index():
         # Save outputs
         # KML
         out_kml = os.path.join(tmpdir, "Grid.kml")
-        save_kml_from_cells(all_cells, out_kml, description=f"Grid generated {datetime.utcnow().isoformat()}")
+        save_kml_from_cells(all_cells, out_kml, description=f"UI Developed by Krishnasureshkumar FG")
 
         # KMZ
         out_kmz = os.path.join(tmpdir, "Grid.kmz")
